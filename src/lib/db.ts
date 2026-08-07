@@ -34,8 +34,14 @@ type Driver = {
  */
 let dbError: string | null = null;
 
-/** Mensaje de error de configuración, si lo hay (null = todo OK). */
+/**
+ * Mensaje de error de configuración, si lo hay (null = todo OK).
+ * Fuerza la inicialización: en la primera llamada del proceso (p. ej. un
+ * webhook o una ruta API) la BD todavía no se ha creado, y sin esto un fallo
+ * de configuración pasaría desapercibido en la primera petición.
+ */
 export function getDbError(): string | null {
+  getDb();
   return dbError;
 }
 
