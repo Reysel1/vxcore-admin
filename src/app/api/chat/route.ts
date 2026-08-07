@@ -35,10 +35,20 @@ export async function GET(req: NextRequest) {
   // El staff ha visto los mensajes del usuario.
   markMessagesRead(user, "user");
 
+  // ?ticket=<id> limita la conversación a ese ticket (incluye los mensajes
+  // legacy sin ticket para no perder historial).
+  const ticketId = Number(req.nextUrl.searchParams.get("ticket") ?? 0);
+  let filtered = messages;
+  if (ticketId > 0) {
+    filtered = messages.filter(
+      (m) => Number(m.ticket_id) === ticketId || m.ticket_id == null
+    );
+  }
+
   // Ticket del usuario para que el staff vea el estado y la valoración.
   const ticket = getUserTicket(user) ?? null;
 
-  return NextResponse.json({ messages, ticket });
+  return NextResponse.json({ messages: filtered, ticket });
 }
 
 export async function POST(req: NextRequest) {
@@ -70,10 +80,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // El mensaje queda ligado al último ticket del usuario (abierto o cerrado).
+  const userTicket = getUserTicket(user) ?? null;
   const created = addMessage({
     userEmail: user,
     sender: "staff",
     body: message,
+    ticketId: userTicket ? Number(userTicket.id) : null,
   });
 
   return NextResponse.json({ message: created });

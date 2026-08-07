@@ -103,6 +103,7 @@ const SCHEMA = `
     sender TEXT NOT NULL DEFAULT 'user',
     body TEXT NOT NULL,
     read INTEGER NOT NULL DEFAULT 0,
+    ticket_id INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_email);
@@ -131,6 +132,7 @@ const SCHEMA = `
 const MIGRATIONS: { table: string; column: string; type: string }[] = [
   { table: "installers", column: "asset_id", type: "INTEGER" },
   { table: "installers", column: "asset_repo", type: "TEXT" },
+  { table: "messages", column: "ticket_id", type: "INTEGER" },
 ];
 
 function migrate(driver: Driver): void {
@@ -448,11 +450,14 @@ export function addMessage(input: {
   userEmail: string;
   sender: "user" | "staff";
   body: string;
+  ticketId?: number | null;
 }): Row {
   const db = getDb();
   const info = db
-    .prepare("INSERT INTO messages (user_email, sender, body) VALUES (?, ?, ?)")
-    .run(input.userEmail, input.sender, input.body);
+    .prepare(
+      "INSERT INTO messages (user_email, sender, body, ticket_id) VALUES (?, ?, ?, ?)"
+    )
+    .run(input.userEmail, input.sender, input.body, input.ticketId ?? null);
   return db
     .prepare("SELECT * FROM messages WHERE id = ?")
     .get(Number(info.lastInsertRowid)) as Row;
