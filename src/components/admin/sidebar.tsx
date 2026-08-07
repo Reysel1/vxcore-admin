@@ -5,12 +5,13 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
-  MessageCircle,
   MessageSquareText,
   PackageOpen,
   ReceiptText,
+  Ticket,
   Users,
 } from "lucide-react";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -23,7 +24,7 @@ const NAV = [
   { href: "/orders", label: "Pedidos", icon: ReceiptText },
   { href: "/licenses", label: "Licencias", icon: KeyRound },
   { href: "/installers", label: "Instaladores", icon: PackageOpen },
-  { href: "/chat", label: "Chat", icon: MessageCircle },
+  { href: "/tickets", label: "Tickets", icon: Ticket },
   { href: "/contacts", label: "Contactos", icon: MessageSquareText },
 ];
 
@@ -44,9 +45,14 @@ export function Sidebar({ chatUnread = 0 }: { chatUnread?: number }) {
       {/* Sidebar escritorio */}
       <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-border bg-muted/30 md:flex">
         <div className="flex h-16 items-center gap-2.5 border-b border-border px-5">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-foreground font-heading text-sm font-bold text-background">
-            VX
-          </span>
+          <Image
+            src="/brand/vxcore-icon.png"
+            alt=""
+            width={32}
+            height={32}
+            aria-hidden
+            className="size-8 shrink-0"
+          />
           <div className="leading-tight">
             <div className="text-sm font-semibold">VXCore Admin</div>
             <div className="text-xs text-muted-foreground">Panel de control</div>
@@ -72,7 +78,7 @@ export function Sidebar({ chatUnread = 0 }: { chatUnread?: number }) {
               >
                 <item.icon className="size-4" />
                 <span className="flex-1">{item.label}</span>
-                {item.href === "/chat" && chatUnread > 0 && (
+                {item.href === "/tickets" && chatUnread > 0 && (
                   <span className="flex size-5 items-center justify-center rounded-full bg-background text-[11px] font-semibold text-foreground ring-1 ring-border">
                     {chatUnread}
                   </span>
@@ -106,9 +112,14 @@ export function Sidebar({ chatUnread = 0 }: { chatUnread?: number }) {
       {/* Cabecera móvil */}
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-xl md:hidden">
         <div className="flex items-center gap-2">
-          <span className="flex size-7 items-center justify-center rounded-md bg-foreground font-heading text-xs font-bold text-background">
-            VX
-          </span>
+          <Image
+            src="/brand/vxcore-icon.png"
+            alt=""
+            width={28}
+            height={28}
+            aria-hidden
+            className="size-7 shrink-0"
+          />
           <span className="text-sm font-semibold">VXCore Admin</span>
         </div>
         <Button
@@ -138,7 +149,7 @@ export function Sidebar({ chatUnread = 0 }: { chatUnread?: number }) {
             >
               <item.icon className="size-3.5" />
               {item.label}
-              {item.href === "/chat" && chatUnread > 0 && (
+              {item.href === "/tickets" && chatUnread > 0 && (
                 <span className="flex size-4 items-center justify-center rounded-full bg-foreground text-[10px] font-semibold text-background">
                   {chatUnread}
                 </span>

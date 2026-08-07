@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/components/admin/login-form";
@@ -29,9 +30,14 @@ export default async function LoginPage() {
 
       <div className="relative w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-foreground font-heading text-lg font-bold text-background">
-            VX
-          </div>
+          <Image
+            src="/brand/vxcore-icon.png"
+            alt=""
+            width={48}
+            height={48}
+            aria-hidden
+            className="mx-auto size-12"
+          />
           <h1 className="mt-4 font-heading text-xl font-semibold tracking-tight">
             VXCore Admin
           </h1>

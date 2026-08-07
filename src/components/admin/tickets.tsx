@@ -22,15 +22,19 @@ type Msg = {
   created_at: string;
 };
 
-type Conv = {
+type TicketItem = {
+  id: number | null;
   user_email: string;
   user_name: string | null;
-  last_body: string;
-  last_sender: "user" | "staff";
-  last_at: string;
+  subject: string | null;
+  status: "open" | "closed" | "none";
+  rating: number | null;
+  rating_comment: string | null;
+  created_at: string;
+  closed_at: string | null;
+  rated_at: string | null;
+  last_body: string | null;
   unread: number;
-  ticket_status: "open" | "closed" | null;
-  ticket_rating: number | null;
 };
 
 type Ticket = {
@@ -45,11 +49,28 @@ type Ticket = {
   created_at: string;
 };
 
+const TICKET_POLL_MS = 5000;
+const MSG_POLL_MS = 4000;
+
+function formatDate(sqlDate?: string | null) {
+  if (!sqlDate) return "";
+  const d = new Date(sqlDate.replace(" ", "T") + "Z");
+  const today = new Date();
+  const sameDay = d.toDateString() === today.toDateString();
+  const time = d.toLocaleTimeString("es-ES", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return sameDay
+    ? time
+    : `${d.toLocaleDateString("es-ES", { day: "numeric", month: "short" })} · ${time}`;
+}
+
 /** Estrellas de solo lectura para mostrar la valoración del usuario. */
 function StarRating({ value }: { value: number }) {
   return (
     <span
-      className="inline-flex items-center gap-0.5"
+      className="inline-flex shrink-0 items-center gap-0.5"
       aria-label={`Valoración: ${value} de 5`}
     >
       {Array.from({ length: 5 }, (_, i) => i + 1).map((n) => (
@@ -67,60 +88,65 @@ function StarRating({ value }: { value: number }) {
   );
 }
 
-function formatTime(sqlDate?: string): string {
-  if (!sqlDate) return "";
-  const d = new Date(sqlDate.replace(" ", "T") + "Z");
-  const today = new Date();
-  const sameDay = d.toDateString() === today.toDateString();
-  const time = d.toLocaleTimeString("es-ES", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  return sameDay
-    ? time
-    : `${d.toLocaleDateString("es-ES", { day: "numeric", month: "short" })} · ${time}`;
+function StatusBadge({ status }: { status: TicketItem["status"] }) {
+  if (status === "open") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-500">
+        <span className="size-1.5 rounded-full bg-emerald-500" />
+        Abierto
+      </span>
+    );
+  }
+  if (status === "none") {
+    return (
+      <span className="inline-flex shrink-0 items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-500">
+        Sin ticket
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+      Cerrado
+    </span>
+  );
 }
 
-export function ChatAdmin() {
-  const [conversations, setConversations] = React.useState<Conv[]>([]);
+export function TicketsAdmin() {
+  const [tickets, setTickets] = React.useState<TicketItem[]>([]);
   const [selected, setSelected] = React.useState<string | null>(null);
   const [messages, setMessages] = React.useState<Msg[]>([]);
   const [ticket, setTicket] = React.useState<Ticket | null>(null);
   const [draft, setDraft] = React.useState("");
-  const [loadingConv, setLoadingConv] = React.useState(true);
+  const [loadingTickets, setLoadingTickets] = React.useState(true);
   const [sending, setSending] = React.useState(false);
   const bottomRef = React.useRef<HTMLDivElement>(null);
   const knownIds = React.useRef<Set<number>>(new Set());
   const selectedRef = React.useRef<string | null>(null);
 
-  const current = conversations.find((c) => c.user_email === selected) ?? null;
+  const current = tickets.find((t) => t.user_email === selected) ?? null;
+  const openCount = tickets.filter((t) => t.status === "open").length;
 
-  /* ---------- lista de conversaciones ---------- */
-  async function loadConversations() {
+  /* ---------- lista de tickets ---------- */
+  async function loadTickets() {
     try {
-      const res = await fetch("/api/chat/conversations");
+      const res = await fetch("/api/tickets");
       if (!res.ok) return;
       const data = await res.json();
-      if (!Array.isArray(data.conversations)) return;
-      setConversations(data.conversations as Conv[]);
-      setSelected((prev) => {
-        if (prev) return prev;
-        return (data.conversations[0]?.user_email as string) ?? null;
-      });
+      if (!Array.isArray(data.tickets)) return;
+      setTickets(data.tickets as TicketItem[]);
     } catch {
       /* noop */
     } finally {
-      setLoadingConv(false);
+      setLoadingTickets(false);
     }
   }
 
-  /* ---------- mensajes de la conversación seleccionada ---------- */
+  /* ---------- mensajes del ticket seleccionado ---------- */
   async function loadMessages(user: string) {
     try {
       const res = await fetch(`/api/chat?user=${encodeURIComponent(user)}`);
       if (!res.ok) return;
-      // Si el usuario cambió de conversación mientras llegaba la respuesta,
-      // descartamos los mensajes de la conversación anterior.
+      // Si cambió de ticket mientras llegaba la respuesta, descartamos.
       if (selectedRef.current !== user) return;
       const data = await res.json();
       if (!Array.isArray(data.messages)) return;
@@ -138,8 +164,8 @@ export function ChatAdmin() {
   }
 
   React.useEffect(() => {
-    const t = window.setTimeout(loadConversations, 0);
-    const id = window.setInterval(loadConversations, 5000);
+    const t = window.setTimeout(loadTickets, 0);
+    const id = window.setInterval(loadTickets, TICKET_POLL_MS);
     return () => {
       window.clearTimeout(t);
       window.clearInterval(id);
@@ -155,7 +181,7 @@ export function ChatAdmin() {
       setTicket(null);
     }, 0);
     const t2 = window.setTimeout(() => loadMessages(selected), 0);
-    const id = window.setInterval(() => loadMessages(selected), 4000);
+    const id = window.setInterval(() => loadMessages(selected), MSG_POLL_MS);
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
@@ -186,13 +212,12 @@ export function ChatAdmin() {
         return;
       }
       const created = data.message as Msg;
-      // El polling pudo añadir este mensaje antes que la respuesta del POST.
       if (!knownIds.current.has(created.id)) {
         knownIds.current.add(created.id);
         setMessages((prev) => [...prev, created]);
       }
       setDraft("");
-      loadConversations();
+      loadTickets();
     } catch {
       toast.error("Error de red.");
     } finally {
@@ -201,82 +226,74 @@ export function ChatAdmin() {
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-      {/* Lista de conversaciones */}
+    <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
+      {/* Lista de tickets */}
       <Card className="lg:h-[calc(100vh-12rem)]">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Inbox className="size-4 text-muted-foreground" />
-            Conversaciones
+            Tickets
           </CardTitle>
+          {!loadingTickets && (
+            <p className="text-xs text-muted-foreground">
+              {openCount} abiertos · {tickets.length - openCount} cerrados
+            </p>
+          )}
         </CardHeader>
         <CardContent>
-          {loadingConv ? (
+          {loadingTickets ? (
             <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
               <Loader2 className="mr-2 size-4 animate-spin" />
               Cargando…
             </div>
-          ) : conversations.length === 0 ? (
+          ) : tickets.length === 0 ? (
             <div className="flex h-32 flex-col items-center justify-center gap-1.5 text-center">
-              <MessageCircle className="size-7 text-muted-foreground/50" />
+              <Ticket className="size-7 text-muted-foreground/50" />
               <p className="text-sm text-muted-foreground">
-                Todavía no hay conversaciones.
+                Todavía no hay tickets.
               </p>
             </div>
           ) : (
-            <div className="flex gap-2 overflow-x-auto pb-2 lg:max-h-[calc(100vh-16rem)] lg:flex-col lg:overflow-x-visible lg:overflow-y-auto lg:pb-0">
-              {conversations.map((conv) => (
+            <div className="flex gap-2 overflow-x-auto pb-2 lg:max-h-[calc(100vh-18rem)] lg:flex-col lg:overflow-x-visible lg:overflow-y-auto lg:pb-0">
+              {/* Un usuario puede tener varios tickets: la clave debe ser
+                  única (id del ticket; las conversaciones sin ticket solo
+                  tienen una fila, con id NULL). */}
+              {tickets.map((t) => (
                 <button
-                  key={conv.user_email}
-                  onClick={() => setSelected(conv.user_email)}
+                  key={t.id ?? t.user_email}
+                  onClick={() => setSelected(t.user_email)}
                   className={cn(
-                    "min-w-56 shrink-0 rounded-xl border p-3 text-left transition-colors lg:min-w-0",
-                    selected === conv.user_email
+                    "min-w-60 shrink-0 rounded-xl border p-3 text-left transition-colors lg:min-w-0",
+                    selected === t.user_email
                       ? "border-foreground/40 bg-muted"
                       : "border-border bg-background hover:border-foreground/25"
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span
-                        className={cn(
-                          "size-1.5 shrink-0 rounded-full",
-                          conv.ticket_status === "open"
-                            ? "bg-emerald-500"
-                            : conv.ticket_status === "closed"
-                              ? "bg-muted-foreground/40"
-                              : "bg-muted-foreground/15"
-                        )}
-                        title={
-                          conv.ticket_status === "open"
-                            ? "Ticket abierto"
-                            : conv.ticket_status === "closed"
-                              ? "Ticket cerrado"
-                              : "Sin ticket"
-                        }
-                      />
-                      <span className="truncate text-sm font-medium">
-                        {conv.user_name ?? conv.user_email}
-                      </span>
-                      {conv.ticket_status && Number(conv.ticket_rating) > 0 && (
-                        <Star
-                          className="size-3 shrink-0 fill-amber-400 text-amber-400"
-                          aria-label={`Valorado con ${conv.ticket_rating} de 5`}
-                        />
-                      )}
+                    <span className="truncate text-sm font-medium">
+                      {t.subject ??
+                        (t.id ? `Ticket #${t.id}` : "Conversación")}
                     </span>
-                    {Number(conv.unread) > 0 && (
+                    {Number(t.unread) > 0 && (
                       <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-background">
-                        {String(conv.unread)}
+                        {String(t.unread)}
                       </span>
                     )}
                   </div>
-                  <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {conv.last_sender === "staff" ? "Tú: " : ""}
-                    {conv.last_body}
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <span className="truncate text-xs text-muted-foreground">
+                      {t.user_name ?? t.user_email}
+                    </span>
+                    <StatusBadge status={t.status} />
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    {Number(t.rating) > 0 && <StarRating value={Number(t.rating)} />}
+                    <span className="truncate text-xs text-muted-foreground">
+                      {t.last_body ?? "Sin mensajes"}
+                    </span>
                   </div>
                   <div className="mt-1 text-[10px] text-muted-foreground">
-                    {conv.user_email} · {formatTime(conv.last_at)}
+                    {formatDate(t.created_at)}
                   </div>
                 </button>
               ))}
@@ -285,7 +302,7 @@ export function ChatAdmin() {
         </CardContent>
       </Card>
 
-      {/* Ventana de chat */}
+      {/* Conversación del ticket seleccionado */}
       <Card className="flex flex-col">
         <CardHeader className="border-b border-border pb-3">
           <CardTitle className="flex flex-wrap items-center gap-x-2 gap-y-2 text-base">
@@ -298,7 +315,7 @@ export function ChatAdmin() {
                 </span>
               </span>
             ) : (
-              "Selecciona una conversación"
+              "Selecciona un ticket"
             )}
             {ticket && (
               <span
@@ -330,8 +347,9 @@ export function ChatAdmin() {
 
         <CardContent className="flex flex-1 flex-col gap-3">
           {!selected ? (
-            <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-              Elige una conversación de la izquierda para responder.
+            <div className="flex h-72 flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+              <Ticket className="size-10 text-muted-foreground/40" />
+              Selecciona un ticket de la lista para ver la conversación.
             </div>
           ) : (
             <>
@@ -362,7 +380,7 @@ export function ChatAdmin() {
                       </div>
                       <span className="px-1 text-[10px] text-muted-foreground">
                         {m.sender === "staff" ? "Tú (staff)" : "Usuario"} ·{" "}
-                        {formatTime(m.created_at)}
+                        {formatDate(m.created_at)}
                       </span>
                     </div>
                   ))

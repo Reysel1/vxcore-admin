@@ -517,6 +517,41 @@ export function getUserTicket(userEmail: string): Row | undefined {
     .get(userEmail) as Row | undefined;
 }
 
+/**
+ * Lista de tickets para el panel admin, con datos del usuario y del último
+ * mensaje. Incluye también las conversaciones sin ticket (legacy) marcadas
+ * con status 'none'. Los abiertos van primero.
+ */
+export function listTicketsAdmin(): Row[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM (
+         SELECT t.id, t.user_email, u.name AS user_name, t.subject, t.status, t.rating,
+                t.rating_comment, t.created_at, t.closed_at, t.rated_at,
+                (SELECT body FROM messages WHERE user_email = t.user_email ORDER BY id DESC LIMIT 1) AS last_body,
+                (SELECT COUNT(*) FROM messages WHERE user_email = t.user_email AND sender = 'user' AND read = 0) AS unread
+         FROM tickets t
+         LEFT JOIN users u ON u.email = t.user_email
+
+         UNION ALL
+
+         SELECT NULL AS id, m.user_email, u.name AS user_name, NULL AS subject,
+                'none' AS status, NULL AS rating, NULL AS rating_comment,
+                MIN(m.created_at) AS created_at, NULL AS closed_at, NULL AS rated_at,
+                (SELECT body FROM messages WHERE user_email = m.user_email ORDER BY id DESC LIMIT 1) AS last_body,
+                (SELECT COUNT(*) FROM messages WHERE user_email = m.user_email AND sender = 'user' AND read = 0) AS unread
+         FROM messages m
+         LEFT JOIN users u ON u.email = m.user_email
+         WHERE NOT EXISTS (SELECT 1 FROM tickets t2 WHERE t2.user_email = m.user_email)
+         GROUP BY m.user_email, u.name
+       )
+       ORDER BY
+         CASE WHEN status = 'open' THEN 0 WHEN status = 'none' THEN 1 ELSE 2 END,
+         created_at DESC`
+    )
+    .all() as Row[];
+}
+
 /* ------------------------------------------------------------------ */
 /* Estadísticas                                                        */
 /* ------------------------------------------------------------------ */
