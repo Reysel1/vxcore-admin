@@ -6,7 +6,9 @@ import {
   ReceiptText,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 
+import { EmptyState } from "@/components/admin/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -123,9 +125,12 @@ export default function AdminOverviewPage() {
           ) : (
             <p className="text-sm text-muted-foreground">
               Todavía no has publicado ningún instalador. Ve a{" "}
-              <a href="/installers" className="text-foreground underline underline-offset-4">
+              <Link
+                href="/installers"
+                className="text-foreground underline underline-offset-4"
+              >
                 Instaladores
-              </a>
+              </Link>
               .
             </p>
           )}
@@ -143,7 +148,11 @@ export default function AdminOverviewPage() {
           </CardHeader>
           <CardContent>
             {orders.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sin pedidos aún.</p>
+              <EmptyState
+                icon={ReceiptText}
+                title="Sin pedidos aún"
+                description="Los pedidos aparecerán aquí en cuanto alguien inicie un pago."
+              />
             ) : (
               <Table>
                 <TableHeader>
@@ -195,13 +204,14 @@ export default function AdminOverviewPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {contacts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Sin mensajes todavía. La sección de contacto de la web los
-                recoge aquí.
-              </p>
+              <EmptyState
+                icon={MessageSquareText}
+                title="Sin mensajes todavía"
+                description="La sección de contacto de la web los recoge aquí."
+              />
             ) : (
               contacts.map((c) => (
-                <a
+                <Link
                   key={String(c.id)}
                   href="/contacts"
                   className="rounded-lg border border-border bg-muted/30 p-3 transition-colors hover:border-foreground/25"
@@ -217,7 +227,7 @@ export default function AdminOverviewPage() {
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {String(c.name)} · {formatDate(c.created_at as string)}
                   </p>
-                </a>
+                </Link>
               ))
             )}
           </CardContent>

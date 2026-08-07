@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState } from "@/components/admin/empty-state";
 import { GrantLicenseButton } from "@/components/admin/user-actions";
 import { listUsers } from "@/lib/db";
 
@@ -44,10 +45,11 @@ export default function UsersPage() {
         </CardHeader>
         <CardContent>
           {users.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Todavía no hay usuarios. Aparecerán aquí al iniciar sesión con
-              Google o Discord desde la web.
-            </p>
+            <EmptyState
+              icon={Users}
+              title="Todavía no hay usuarios"
+              description="Aparecerán aquí al iniciar sesión con Google o Discord desde la web."
+            />
           ) : (
             <Table>
               <TableHeader>

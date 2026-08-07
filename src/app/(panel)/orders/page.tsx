@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState } from "@/components/admin/empty-state";
 import { MarkPaidButton } from "@/components/admin/order-actions";
 import { listOrders } from "@/lib/db";
 
@@ -52,10 +53,11 @@ export default function OrdersPage() {
         </CardHeader>
         <CardContent>
           {orders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Sin pedidos todavía. Se crean cuando un usuario pulsa «Pagar con
-              Stripe» en su panel.
-            </p>
+            <EmptyState
+              icon={ReceiptText}
+              title="Sin pedidos todavía"
+              description="Se crean cuando un usuario pulsa «Pagar con Stripe» en su panel."
+            />
           ) : (
             <Table>
               <TableHeader>

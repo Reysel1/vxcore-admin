@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState } from "@/components/admin/empty-state";
 import { UploadInstallerForm } from "@/components/admin/installer-upload";
 import { listInstallers } from "@/lib/db";
 import {
@@ -85,9 +86,11 @@ export default async function InstallersPage() {
         </CardHeader>
         <CardContent>
           {installers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Sin versiones publicadas todavía.
-            </p>
+            <EmptyState
+              icon={PackageOpen}
+              title="Sin versiones publicadas"
+              description="Publica una release de GitHub desde el formulario de arriba para que los usuarios puedan descargarla."
+            />
           ) : (
             <Table>
               <TableHeader>

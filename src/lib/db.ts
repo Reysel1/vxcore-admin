@@ -126,6 +126,19 @@ const SCHEMA = `
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_tickets_email ON tickets(user_email);
+
+  -- Equipos donde está instalada la app de escritorio. La escribe la web al
+  -- validar la licencia (el agente valida cada 10 min); aquí sólo se lee.
+  -- Definida también en este esquema porque admin y web comparten base y
+  -- cualquiera de las dos puede crearla primero.
+  CREATE TABLE IF NOT EXISTS installations (
+    id TEXT PRIMARY KEY,
+    license_key TEXT NOT NULL,
+    name TEXT,
+    first_seen TEXT NOT NULL DEFAULT (datetime('now')),
+    last_seen TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_installations_license ON installations(license_key);
 `;
 
 /**
@@ -383,6 +396,31 @@ export function listLicenses(): Row[] {
 
 export function setLicenseStatus(id: number, status: "active" | "revoked"): void {
   getDb().prepare("UPDATE licenses SET status = ? WHERE id = ?").run(status, id);
+}
+
+/* ------------------------------------------------------------------ */
+/* Instalaciones (equipos con la app)                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Equipos con la app instalada, con el estado VIVO de su licencia.
+ *
+ * El `LEFT JOIN` con `licenses` es deliberado: revocar una licencia cambia lo
+ * que se ve aquí en la siguiente consulta, sin tocar la tabla `installations`
+ * ni ejecutar borrados en cascada. `license_status` queda a NULL si la
+ * licencia se borró del todo, que también es «sin acceso».
+ */
+export function listInstallations(): Row[] {
+  return getDb()
+    .prepare(
+      `SELECT i.*,
+         l.status AS license_status,
+         l.user_email AS license_email
+       FROM installations i
+       LEFT JOIN licenses l ON LOWER(l.license_key) = LOWER(i.license_key)
+       ORDER BY i.last_seen DESC`
+    )
+    .all() as Row[];
 }
 
 /* ------------------------------------------------------------------ */

@@ -9,27 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { ApiError, sendJson } from "@/lib/fetch-json";
 import type { ReleaseAsset } from "@/lib/github";
 
 type Asset = ReleaseAsset & { alreadyPublished: boolean };
-
-/**
- * Saca el mensaje de error real de la respuesta.
- *
- * No siempre es JSON: si la petición no llega a la función (por ejemplo un 413
- * de la plataforma) el cuerpo es texto plano, y hacer `res.json()` a secas
- * lanzaba una excepción que acababa mostrando un inútil «Error de red».
- */
-async function readError(res: Response): Promise<string> {
-  const text = await res.text();
-  try {
-    const data = JSON.parse(text) as { error?: string };
-    if (data.error) return data.error;
-  } catch {
-    // Cuerpo no-JSON: caemos al mensaje genérico de abajo.
-  }
-  return `Error ${res.status}: ${text.slice(0, 140) || res.statusText}`;
-}
 
 /** «v0.2.4» → «0.2.4»; el resto se deja tal cual. */
 function versionFromTag(tag: string): string {
@@ -74,23 +57,16 @@ export function UploadInstallerForm({
 
     setSaving(true);
     try {
-      const res = await fetch("/api/installers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await sendJson<{ version: string }>(
+        "/api/installers",
+        "POST",
+        {
           version: version.trim(),
           note,
           isLatest,
           assetId: Number(assetId),
-        }),
-      });
-
-      if (!res.ok) {
-        toast.error(await readError(res));
-        return;
-      }
-
-      const data = (await res.json()) as { version: string };
+        }
+      );
       toast.success(`Versión v${data.version} publicada`);
       setVersion("");
       setNote("");
@@ -98,8 +74,8 @@ export function UploadInstallerForm({
       router.refresh();
     } catch (err) {
       toast.error(
-        err instanceof Error
-          ? `No se pudo publicar: ${err.message}`
+        err instanceof ApiError
+          ? err.message
           : "No se pudo publicar la versión."
       );
     } finally {
@@ -111,7 +87,15 @@ export function UploadInstallerForm({
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
-          <Label htmlFor="inst-asset">Fichero de la release</Label>
+          <Label htmlFor="inst-asset" className="flex flex-wrap items-baseline gap-x-2">
+            Fichero de la release
+            {/* El repositorio se recibía como prop pero no se pintaba: si hay
+                varios repos configurados, saber de cuál sale la lista evita
+                publicar el binario equivocado. */}
+            <span className="font-mono text-xs font-normal text-muted-foreground">
+              {repo}
+            </span>
+          </Label>
           <Button
             type="button"
             variant="ghost"

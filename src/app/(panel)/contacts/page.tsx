@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ContactActions } from "@/components/admin/contact-actions";
+import { EmptyState } from "@/components/admin/empty-state";
 import { listContacts } from "@/lib/db";
 
 function formatDate(sqlDate?: string | null): string {
@@ -52,10 +53,11 @@ export default function ContactsPage() {
         </CardHeader>
         <CardContent>
           {contacts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Sin mensajes todavía. Aparecerán aquí cuando alguien use el
-              formulario de contacto de la web.
-            </p>
+            <EmptyState
+              icon={MessageSquareText}
+              title="Sin mensajes todavía"
+              description="Aparecerán aquí cuando alguien use el formulario de contacto de la web."
+            />
           ) : (
             <Table>
               <TableHeader>
@@ -99,6 +101,7 @@ export default function ContactsPage() {
                       <ContactActions
                         id={Number(contact.id)}
                         status={contact.status as "new" | "read"}
+                        subject={String(contact.subject)}
                       />
                     </TableCell>
                   </TableRow>

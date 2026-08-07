@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ApiError, sendJson } from "@/lib/fetch-json";
 
 export function CreateLicenseForm() {
   const router = useRouter();
@@ -19,22 +20,19 @@ export function CreateLicenseForm() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch("/api/licenses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, note }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error ?? "No se pudo crear la licencia.");
-        return;
-      }
+      const data = await sendJson<{ license_key: string }>(
+        "/api/licenses",
+        "POST",
+        { email, note }
+      );
       toast.success(`Licencia ${data.license_key} creada`);
       setEmail("");
       setNote("");
       router.refresh();
-    } catch {
-      toast.error("Error de red.");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "No se pudo crear la licencia."
+      );
     } finally {
       setLoading(false);
     }
@@ -92,23 +90,16 @@ export function ToggleLicenseButton({
   async function toggle() {
     setLoading(true);
     try {
-      const res = await fetch("/api/licenses", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id,
-          status: isActive ? "revoked" : "active",
-        }),
+      await sendJson("/api/licenses", "PATCH", {
+        id,
+        status: isActive ? "revoked" : "active",
       });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error ?? "No se pudo actualizar.");
-        return;
-      }
       toast.success(isActive ? "Licencia revocada" : "Licencia activada");
       router.refresh();
-    } catch {
-      toast.error("Error de red.");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "No se pudo actualizar."
+      );
     } finally {
       setLoading(false);
     }

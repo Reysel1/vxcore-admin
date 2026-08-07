@@ -6,6 +6,7 @@ import * as React from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { ApiError, sendJson } from "@/lib/fetch-json";
 
 export function MarkPaidButton({ orderId }: { orderId: number }) {
   const router = useRouter();
@@ -14,24 +15,23 @@ export function MarkPaidButton({ orderId }: { orderId: number }) {
   async function markPaid() {
     setLoading(true);
     try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: orderId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error ?? "No se pudo marcar como pagado.");
-        return;
-      }
+      const data = await sendJson<{ license_key: string | null }>(
+        "/api/orders",
+        "POST",
+        { id: orderId }
+      );
       toast.success(
         data.license_key
           ? `Pedido pagado. Licencia ${data.license_key} creada.`
           : "Pedido marcado como pagado."
       );
       router.refresh();
-    } catch {
-      toast.error("Error de red.");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : "No se pudo marcar como pagado."
+      );
     } finally {
       setLoading(false);
     }

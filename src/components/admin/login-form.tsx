@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ApiError, sendJson } from "@/lib/fetch-json";
 
 export function LoginForm() {
   const router = useRouter();
@@ -18,22 +19,16 @@ export function LoginForm() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error ?? "Contraseña incorrecta.");
-        return;
-      }
+      await sendJson("/api/login", "POST", { password });
       toast.success("Bienvenido de vuelta.");
       router.push("/");
       router.refresh();
-    } catch {
-      toast.error("Error de red.");
-    } finally {
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Contraseña incorrecta."
+      );
+      // Solo soltamos el botón si falló: si fue bien, la navegación se lleva
+      // el formulario por delante y reactivarlo produce un parpadeo.
       setLoading(false);
     }
   }

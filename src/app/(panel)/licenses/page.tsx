@@ -13,6 +13,7 @@ import {
   CreateLicenseForm,
   ToggleLicenseButton,
 } from "@/components/admin/license-actions";
+import { EmptyState } from "@/components/admin/empty-state";
 import { listLicenses } from "@/lib/db";
 
 function formatDate(sqlDate?: string | null): string {
@@ -58,9 +59,11 @@ export default function LicensesPage() {
         </CardHeader>
         <CardContent>
           {licenses.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Sin licencias todavía.
-            </p>
+            <EmptyState
+              icon={KeyRound}
+              title="Sin licencias todavía"
+              description="Se generan solas al completarse un pago, o puedes crear una a mano en el formulario de arriba."
+            />
           ) : (
             <Table>
               <TableHeader>

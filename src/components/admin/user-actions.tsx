@@ -6,6 +6,7 @@ import * as React from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { ApiError, sendJson } from "@/lib/fetch-json";
 
 export function GrantLicenseButton({ email }: { email: string }) {
   const router = useRouter();
@@ -14,20 +15,17 @@ export function GrantLicenseButton({ email }: { email: string }) {
   async function grant() {
     setLoading(true);
     try {
-      const res = await fetch("/api/licenses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, note: "Licencia manual desde admin" }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error ?? "No se pudo crear la licencia.");
-        return;
-      }
+      const data = await sendJson<{ license_key: string }>(
+        "/api/licenses",
+        "POST",
+        { email, note: "Licencia manual desde admin" }
+      );
       toast.success(`Licencia ${data.license_key} creada`);
       router.refresh();
-    } catch {
-      toast.error("Error de red.");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "No se pudo crear la licencia."
+      );
     } finally {
       setLoading(false);
     }
