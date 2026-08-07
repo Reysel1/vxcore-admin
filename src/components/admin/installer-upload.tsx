@@ -109,18 +109,6 @@ export function UploadInstallerForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-      <p className="rounded-lg border border-border bg-muted/40 px-3.5 py-3 text-xs text-muted-foreground">
-        El instalador se sube a una release de{" "}
-        <code className="font-mono">{repo}</code> y aquí solo se elige cuál
-        publicar. Los ficheros de cientos de MB no pueden pasar por el servidor:
-        Vercel rechaza las peticiones de más de 4,5 MB.
-        <br />
-        Para subir uno nuevo:{" "}
-        <code className="font-mono">
-          gh release create v1.0.0 --repo {repo} ruta/al.exe
-        </code>
-      </p>
-
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
           <Label htmlFor="inst-asset">Fichero de la release</Label>
