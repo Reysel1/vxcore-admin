@@ -24,6 +24,8 @@ npm run dev
 | `TURSO_DATABASE_URL` | (Opcional) URL de Turso para usar SQLite en la nube             |
 | `TURSO_AUTH_TOKEN`   | (Opcional) Token de Turso                                       |
 | `NEXT_PUBLIC_APP_URL`| URL de la web pública (enlace «Ver la web»)                     |
+| `VXCORE_GITHUB_TOKEN`| Token de GitHub con lectura de contenido sobre el repo de releases |
+| `VXCORE_RELEASES_REPO`| (Opcional) Repo de las releases; por defecto `Reysel1/VXCore-App` |
 
 ## Cómo funciona
 
@@ -37,10 +39,20 @@ npm run dev
   (7 días).
 - **Licencias**: se generan solas cuando Stripe confirma un pago. También
   puedes crearlas a mano desde *Licencias* o desde *Usuarios*.
-- **Instaladores**: sube el `.exe` y marca la versión como «última». Eso es lo
-  que se descarga desde `/dashboard` de la web. *(En Vercel la subida de
-  ficheros está desactivada — falta almacenamiento de objetos; usa el admin
-  local para eso.)*
+- **Instaladores**: el `.exe` se sube a una **release de GitHub** del repo
+  privado, y aquí solo eliges cuál publicar y lo marcas como «última». Eso es
+  lo que se descarga desde `/dashboard` de la web.
+
+  ```bash
+  gh release create v1.0.0 --repo Reysel1/VXCore-App ruta/al/VXCore-Setup.exe
+  ```
+
+  El binario nunca pasa por el servidor: una función de Vercel rechaza
+  cualquier petición de más de 4,5 MB (`FUNCTION_PAYLOAD_TOO_LARGE`), y estos
+  instaladores pesan cientos de MB. Para descargarlo, la web le pide a GitHub
+  una URL firmada temporal y redirige al navegador. Como el repo de releases es
+  privado, el asset no es accesible sin token: la descarga sigue protegida por
+  sesión y pago.
 - **Chat**: responde aquí a los usuarios del chat del panel de la web.
 
 ## Desplegar en Vercel
@@ -50,8 +62,8 @@ npm run dev
    detecta solo).
 2. Añade las variables de entorno en Vercel (Settings → Environment Variables):
    `ADMIN_PASSWORD`, `ADMIN_SECRET`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`,
-   `NEXT_PUBLIC_APP_URL`. (También en *Preview/Development* si las quieres
-   en previsualizaciones.)
+   `NEXT_PUBLIC_APP_URL`, `VXCORE_GITHUB_TOKEN`. (También en
+   *Preview/Development* si las quieres en previsualizaciones.)
 3. Crea la base en [turso.tech](https://turso.tech) (plan gratis):
    ```bash
    npm i -g turso

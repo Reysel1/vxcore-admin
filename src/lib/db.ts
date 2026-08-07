@@ -82,6 +82,8 @@ const SCHEMA = `
     size_bytes INTEGER NOT NULL DEFAULT 0,
     is_latest INTEGER NOT NULL DEFAULT 0,
     note TEXT,
+    asset_id INTEGER,
+    asset_repo TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -105,6 +107,34 @@ const SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_email);
 `;
+
+/**
+ * Columnas añadidas después de la primera versión del esquema.
+ *
+ * `CREATE TABLE IF NOT EXISTS` no toca una tabla que ya existe, así que las
+ * bases creadas antes se quedarían sin estas columnas. SQLite no tiene
+ * `ADD COLUMN IF NOT EXISTS`, de ahí la comprobación con PRAGMA.
+ */
+const MIGRATIONS: { table: string; column: string; type: string }[] = [
+  { table: "installers", column: "asset_id", type: "INTEGER" },
+  { table: "installers", column: "asset_repo", type: "TEXT" },
+];
+
+function migrate(driver: Driver): void {
+  const columnsByTable = new Map<string, Set<string>>();
+
+  for (const { table, column, type } of MIGRATIONS) {
+    let existing = columnsByTable.get(table);
+    if (!existing) {
+      const info = driver.prepare(`PRAGMA table_info(${table})`).all();
+      existing = new Set(info.map((row) => String(row.name)));
+      columnsByTable.set(table, existing);
+    }
+    if (existing.has(column)) continue;
+    driver.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    existing.add(column);
+  }
+}
 
 /** ¿Modo remoto (Turso)? Se activa configurando TURSO_DATABASE_URL. */
 export function isRemote(): boolean {
@@ -193,6 +223,7 @@ export function getDb(): Driver {
   if (db) return db;
   try {
     db = isRemote() ? makeRemoteDriver() : makeLocalDriver();
+    migrate(db);
   } catch (err) {
     // Nunca crashear: degrada a memoria y expón el error para la UI.
     const message =
@@ -343,19 +374,24 @@ export function addInstaller(input: {
   sizeBytes: number;
   isLatest: boolean;
   note?: string | null;
+  /** Asset de release de GitHub donde vive el binario. */
+  assetId: number;
+  assetRepo: string;
 }): void {
   const db = getDb();
   if (input.isLatest) {
     db.prepare("UPDATE installers SET is_latest = 0").run();
   }
   db.prepare(
-    "INSERT INTO installers (version, filename, size_bytes, is_latest, note) VALUES (?, ?, ?, ?, ?)"
+    "INSERT INTO installers (version, filename, size_bytes, is_latest, note, asset_id, asset_repo) VALUES (?, ?, ?, ?, ?, ?, ?)"
   ).run(
     input.version,
     input.filename,
     input.sizeBytes,
     input.isLatest ? 1 : 0,
-    input.note ?? null
+    input.note ?? null,
+    input.assetId,
+    input.assetRepo
   );
 }
 

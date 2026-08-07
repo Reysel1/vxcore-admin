@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Upload } from "lucide-react";
+import { Loader2, RefreshCw, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
@@ -9,50 +9,172 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import type { ReleaseAsset } from "@/lib/github";
 
-export function UploadInstallerForm() {
+type Asset = ReleaseAsset & { alreadyPublished: boolean };
+
+/**
+ * Saca el mensaje de error real de la respuesta.
+ *
+ * No siempre es JSON: si la petición no llega a la función (por ejemplo un 413
+ * de la plataforma) el cuerpo es texto plano, y hacer `res.json()` a secas
+ * lanzaba una excepción que acababa mostrando un inútil «Error de red».
+ */
+async function readError(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const data = JSON.parse(text) as { error?: string };
+    if (data.error) return data.error;
+  } catch {
+    // Cuerpo no-JSON: caemos al mensaje genérico de abajo.
+  }
+  return `Error ${res.status}: ${text.slice(0, 140) || res.statusText}`;
+}
+
+/** «v0.2.4» → «0.2.4»; el resto se deja tal cual. */
+function versionFromTag(tag: string): string {
+  return tag.replace(/^v/i, "");
+}
+
+export function UploadInstallerForm({
+  repo,
+  assets,
+  loadError,
+}: {
+  repo: string;
+  assets: Asset[];
+  loadError: string | null;
+}) {
   const router = useRouter();
   const [version, setVersion] = React.useState("");
   const [note, setNote] = React.useState("");
   const [isLatest, setIsLatest] = React.useState(true);
-  const [file, setFile] = React.useState<File | null>(null);
-  const [loading, setLoading] = React.useState(false);
+  const [assetId, setAssetId] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [refreshing, startRefresh] = React.useTransition();
+
+  const selected = assets.find((a) => String(a.id) === assetId);
+
+  function handleSelect(id: string) {
+    setAssetId(id);
+    // Sugiere la versión a partir de la etiqueta de la release, pero se puede
+    // corregir a mano antes de publicar.
+    const asset = assets.find((a) => String(a.id) === id);
+    if (asset && !version.trim()) {
+      setVersion(versionFromTag(asset.releaseTag));
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file) {
-      toast.error("Selecciona el fichero del instalador.");
+    if (!assetId) {
+      toast.error("Elige el fichero de la release de GitHub.");
       return;
     }
 
-    setLoading(true);
+    setSaving(true);
     try {
-      const form = new FormData();
-      form.append("version", version.trim());
-      form.append("note", note);
-      form.append("isLatest", String(isLatest));
-      form.append("file", file);
+      const res = await fetch("/api/installers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          version: version.trim(),
+          note,
+          isLatest,
+          assetId: Number(assetId),
+        }),
+      });
 
-      const res = await fetch("/api/installers", { method: "POST", body: form });
-      const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error ?? "No se pudo subir el instalador.");
+        toast.error(await readError(res));
         return;
       }
+
+      const data = (await res.json()) as { version: string };
       toast.success(`Versión v${data.version} publicada`);
       setVersion("");
       setNote("");
-      setFile(null);
+      setAssetId("");
       router.refresh();
-    } catch {
-      toast.error("Error de red.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? `No se pudo publicar: ${err.message}`
+          : "No se pudo publicar la versión."
+      );
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <p className="rounded-lg border border-border bg-muted/40 px-3.5 py-3 text-xs text-muted-foreground">
+        El instalador se sube a una release de{" "}
+        <code className="font-mono">{repo}</code> y aquí solo se elige cuál
+        publicar. Los ficheros de cientos de MB no pueden pasar por el servidor:
+        Vercel rechaza las peticiones de más de 4,5 MB.
+        <br />
+        Para subir uno nuevo:{" "}
+        <code className="font-mono">
+          gh release create v1.0.0 --repo {repo} ruta/al.exe
+        </code>
+      </p>
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="inst-asset">Fichero de la release</Label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 text-xs text-muted-foreground"
+            onClick={() => startRefresh(() => router.refresh())}
+            disabled={refreshing}
+          >
+            <RefreshCw
+              className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
+            />
+            Actualizar
+          </Button>
+        </div>
+
+        {loadError ? (
+          <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-3 text-sm text-destructive">
+            {loadError}
+          </p>
+        ) : (
+          <select
+            id="inst-asset"
+            value={assetId}
+            onChange={(e) => handleSelect(e.target.value)}
+            disabled={assets.length === 0}
+            required
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">
+              {assets.length === 0
+                ? "No hay ficheros en las releases de GitHub"
+                : "Elige un fichero…"}
+            </option>
+            {assets.map((asset) => (
+              <option key={asset.id} value={asset.id}>
+                {asset.releaseTag} · {asset.name} ·{" "}
+                {(asset.sizeBytes / 1024 / 1024).toFixed(1)} MB
+                {asset.isDraft ? " · borrador" : ""}
+                {asset.alreadyPublished ? " · ya publicado" : ""}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {selected?.alreadyPublished && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Este fichero ya está asociado a una versión publicada.
+          </p>
+        )}
+      </div>
+
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="inst-version">Versión</Label>
@@ -78,22 +200,6 @@ export function UploadInstallerForm() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="inst-file">Fichero del instalador</Label>
-        <Input
-          id="inst-file"
-          type="file"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground"
-          required
-        />
-        {file && (
-          <p className="text-xs text-muted-foreground">
-            {file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB
-          </p>
-        )}
-      </div>
-
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2.5">
           <Switch
@@ -105,13 +211,13 @@ export function UploadInstallerForm() {
             Marcar como última versión
           </Label>
         </div>
-        <Button type="submit" className="h-9 gap-2" disabled={loading}>
-          {loading ? (
+        <Button type="submit" className="h-9 gap-2" disabled={saving}>
+          {saving ? (
             <Loader2 className="size-4 animate-spin" />
           ) : (
             <Upload className="size-4" />
           )}
-          {loading ? "Subiendo…" : "Publicar versión"}
+          {saving ? "Publicando…" : "Publicar versión"}
         </Button>
       </div>
     </form>

@@ -1,34 +1,19 @@
-import { writeFile } from "node:fs/promises";
-import path from "node:path";
-
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin } from "@/lib/auth";
-import {
-  addInstaller,
-  getDataDir,
-  getDbError,
-  isRemote,
-  listInstallers,
-} from "@/lib/db";
+import { addInstaller, getDbError, listInstallers } from "@/lib/db";
+import { GithubError, getReleaseAsset, getReleasesRepo } from "@/lib/github";
 
 const VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const MAX_SIZE = 500 * 1024 * 1024; // 500 MB
 
+/**
+ * Publica una versión. Recibe solo el id del asset: el .exe ya está en GitHub,
+ * así que el cuerpo son unos pocos bytes y no roza el límite de 4.5 MB que
+ * Vercel impone a las peticiones.
+ */
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
-  if (isRemote()) {
-    // En Vercel no hay disco persistente para los ficheros.
-    return NextResponse.json(
-      {
-        error:
-          "Los instaladores no se pueden subir desde Vercel (no hay almacenamiento de ficheros). Usa el admin local o configura un bucket (R2/S3) — avísanos si lo quieres.",
-      },
-      { status: 400 }
-    );
   }
 
   const dbError = getDbError();
@@ -39,11 +24,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const form = await req.formData();
-  const version = String(form.get("version") ?? "").trim();
-  const note = String(form.get("note") ?? "").trim() || null;
-  const isLatest = form.get("isLatest") === "true";
-  const file = form.get("file");
+  const body = (await req.json().catch(() => null)) as {
+    version?: unknown;
+    note?: unknown;
+    isLatest?: unknown;
+    assetId?: unknown;
+  } | null;
+
+  if (!body) {
+    return NextResponse.json({ error: "Petición inválida." }, { status: 400 });
+  }
+
+  const version = String(body.version ?? "").trim();
+  const note = String(body.note ?? "").trim() || null;
+  const isLatest = body.isLatest === true;
+  const assetId = Number(body.assetId);
 
   if (!version || !VERSION_RE.test(version)) {
     return NextResponse.json(
@@ -51,37 +46,50 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (!file || typeof file === "string") {
-    return NextResponse.json({ error: "Falta el fichero." }, { status: 400 });
-  }
-  if (file.size > MAX_SIZE) {
-    return NextResponse.json({ error: "El fichero es demasiado grande." }, { status: 400 });
+  if (!Number.isInteger(assetId) || assetId <= 0) {
+    return NextResponse.json(
+      { error: "Selecciona el fichero de la release de GitHub." },
+      { status: 400 }
+    );
   }
 
   // Evita sobreescribir una versión ya publicada.
-  const existing = listInstallers().find((i) => i.version === version);
-  if (existing) {
+  if (listInstallers().some((installer) => installer.version === version)) {
     return NextResponse.json(
       { error: `La versión ${version} ya está publicada.` },
       { status: 400 }
     );
   }
 
-  const originalName = file.name || "instalador";
-  const ext = path.extname(originalName) || ".exe";
-  const filename = `vxcore-setup-${version}${ext}`;
-  const bytes = Buffer.from(await file.arrayBuffer());
+  try {
+    // Nombre y tamaño los tomamos de GitHub, no del cliente: así son los
+    // reales y de paso confirmamos que el asset existe y es accesible.
+    const asset = await getReleaseAsset(assetId);
+    if (!asset) {
+      return NextResponse.json(
+        {
+          error:
+            "Ese fichero ya no está en las releases de GitHub. Recarga la lista.",
+        },
+        { status: 404 }
+      );
+    }
 
-  const dir = path.join(getDataDir(), "installers");
-  await writeFile(path.join(dir, filename), bytes);
+    addInstaller({
+      version,
+      filename: asset.name,
+      sizeBytes: asset.sizeBytes,
+      isLatest,
+      note,
+      assetId: asset.id,
+      assetRepo: getReleasesRepo(),
+    });
 
-  addInstaller({
-    version,
-    filename,
-    sizeBytes: bytes.length,
-    isLatest,
-    note,
-  });
-
-  return NextResponse.json({ ok: true, version, filename });
+    return NextResponse.json({ ok: true, version, filename: asset.name });
+  } catch (err) {
+    if (err instanceof GithubError) {
+      return NextResponse.json({ error: err.message }, { status: 502 });
+    }
+    throw err;
+  }
 }

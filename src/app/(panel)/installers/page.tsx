@@ -11,6 +11,12 @@ import {
 } from "@/components/ui/table";
 import { UploadInstallerForm } from "@/components/admin/installer-upload";
 import { listInstallers } from "@/lib/db";
+import {
+  GithubError,
+  getReleasesRepo,
+  listReleaseAssets,
+  type ReleaseAsset,
+} from "@/lib/github";
 
 function formatDate(sqlDate?: string | null): string {
   if (!sqlDate) return "—";
@@ -21,8 +27,25 @@ function formatDate(sqlDate?: string | null): string {
   });
 }
 
-export default function InstallersPage() {
+export default async function InstallersPage() {
   const installers = listInstallers();
+
+  // Los assets se leen aquí, en el servidor: el layout ya exige sesión de
+  // admin, así que el token de GitHub nunca sale del backend.
+  let assets: ReleaseAsset[] = [];
+  let assetsError: string | null = null;
+  try {
+    assets = await listReleaseAssets();
+  } catch (err) {
+    assetsError =
+      err instanceof GithubError
+        ? err.message
+        : "No se pudieron leer las releases de GitHub.";
+  }
+
+  const published = new Set(
+    installers.map((installer) => Number(installer.asset_id))
+  );
 
   return (
     <div className="space-y-6">
@@ -31,8 +54,9 @@ export default function InstallersPage() {
           Instaladores
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Sube las versiones del instalador de VXCore. La marcada como «última»
-          es la que descargan los usuarios desde su panel.
+          Publica las versiones del instalador de VXCore a partir de las
+          releases de GitHub. La marcada como «última» es la que descargan los
+          usuarios desde su panel.
         </p>
       </div>
 
@@ -40,11 +64,18 @@ export default function InstallersPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <PackageOpen className="size-4 text-muted-foreground" />
-            Subir nueva versión
+            Publicar nueva versión
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <UploadInstallerForm />
+          <UploadInstallerForm
+            repo={getReleasesRepo()}
+            assets={assets.map((asset) => ({
+              ...asset,
+              alreadyPublished: published.has(asset.id),
+            }))}
+            loadError={assetsError}
+          />
         </CardContent>
       </Card>
 
