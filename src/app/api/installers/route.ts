@@ -7,6 +7,7 @@ import { isAdmin } from "@/lib/auth";
 import {
   addInstaller,
   getDataDir,
+  getDbError,
   isRemote,
   listInstallers,
 } from "@/lib/db";
@@ -27,6 +28,14 @@ export async function POST(req: NextRequest) {
           "Los instaladores no se pueden subir desde Vercel (no hay almacenamiento de ficheros). Usa el admin local o configura un bucket (R2/S3) — avísanos si lo quieres.",
       },
       { status: 400 }
+    );
+  }
+
+  const dbError = getDbError();
+  if (dbError) {
+    return NextResponse.json(
+      { error: `Base de datos no configurada: ${dbError}` },
+      { status: 503 }
     );
   }
 

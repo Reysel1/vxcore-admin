@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth";
 import {
   createLicense,
+  getDbError,
   listLicenses,
   listOrders,
   markOrderPaid,
@@ -11,6 +12,13 @@ import {
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+  const dbError = getDbError();
+  if (dbError) {
+    return NextResponse.json(
+      { error: `Base de datos no configurada: ${dbError}` },
+      { status: 503 }
+    );
   }
 
   let body: { id?: number };

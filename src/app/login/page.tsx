@@ -8,6 +8,8 @@ export default async function LoginPage() {
     redirect("/");
   }
 
+  const missingEnv = !process.env.ADMIN_PASSWORD;
+
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden px-5">
       {/* Rejilla de fondo */}
@@ -38,6 +40,15 @@ export default async function LoginPage() {
           </p>
         </div>
         <LoginForm />
+        {missingEnv ? (
+          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-600 dark:text-amber-400">
+            <p className="font-medium">Falta ADMIN_PASSWORD en Vercel</p>
+            <p className="mt-1 opacity-80">
+              Configura <code>ADMIN_PASSWORD</code> en Proyecto → Settings →
+              Environment Variables y vuelve a desplegar para poder entrar.
+            </p>
+          </div>
+        ) : null}
       </div>
     </main>
   );

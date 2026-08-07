@@ -50,7 +50,8 @@ npm run dev
    detecta solo).
 2. Añade las variables de entorno en Vercel (Settings → Environment Variables):
    `ADMIN_PASSWORD`, `ADMIN_SECRET`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`,
-   `NEXT_PUBLIC_APP_URL`.
+   `NEXT_PUBLIC_APP_URL`. (También en *Preview/Development* si las quieres
+   en previsualizaciones.)
 3. Crea la base en [turso.tech](https://turso.tech) (plan gratis):
    ```bash
    npm i -g turso
@@ -60,6 +61,11 @@ npm run dev
    turso db tokens create vxcore   # → TURSO_AUTH_TOKEN
    ```
 4. El panel arranca en `https://tu-app.vercel.app` y los datos viven en Turso.
+
+> ⚠️ **Sin `TURSO_DATABASE_URL` el panel no crashea**: degrada a memoria,
+> muestra un aviso en la parte superior y las acciones devuelven 503. Esa es
+> la «página de error» que verías al entrar tras el login — configura Turso y
+> desaparece.
 
 > ⚠️ El modo remoto requiere que **la web** también use la misma base Turso
 > (mismo `TURSO_DATABASE_URL` en su entorno). Hasta entonces, el admin en

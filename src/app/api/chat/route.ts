@@ -1,9 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin } from "@/lib/auth";
-import { addMessage, listMessages, markMessagesRead } from "@/lib/db";
+import {
+  addMessage,
+  getDbError,
+  listMessages,
+  markMessagesRead,
+} from "@/lib/db";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function dbUnavailable(): NextResponse | null {
+  const error = getDbError();
+  return error
+    ? NextResponse.json(
+        { error: `Base de datos no configurada: ${error}` },
+        { status: 503 }
+      )
+    : null;
+}
 
 export async function GET(req: NextRequest) {
   if (!(await isAdmin())) {
@@ -26,6 +41,8 @@ export async function POST(req: NextRequest) {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const down = dbUnavailable();
+  if (down) return down;
 
   let body: { user?: string; message?: string };
   try {

@@ -27,6 +27,18 @@ type Driver = {
   prepare(sql: string): Stmt;
 };
 
+/**
+ * Errores de configuración de la base de datos. En producción (Vercel) la
+ * app NO debe crashear si falta Turso: degrada a una base en memoria y
+ * expone el error para que la interfaz muestre un aviso de configuración.
+ */
+let dbError: string | null = null;
+
+/** Mensaje de error de configuración, si lo hay (null = todo OK). */
+export function getDbError(): string | null {
+  return dbError;
+}
+
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,6 +121,15 @@ export function getDataDir(): string {
 
 let db: Driver | null = null;
 
+function makeMemoryDriver(): Driver {
+  const raw = new DatabaseSync(":memory:", {});
+  raw.exec(SCHEMA);
+  return {
+    exec: (sql) => raw.exec(sql),
+    prepare: (sql) => raw.prepare(sql) as unknown as Stmt,
+  };
+}
+
 /** El driver nativo de libsql añade `_metadata` a cada fila; la limpiamos. */
 function stripMeta(row: Row | undefined): Row | undefined {
   if (row && "_metadata" in row) {
@@ -170,8 +191,32 @@ function makeRemoteDriver(): Driver {
 
 export function getDb(): Driver {
   if (db) return db;
-  db = isRemote() ? makeRemoteDriver() : makeLocalDriver();
+  try {
+    db = isRemote() ? makeRemoteDriver() : makeLocalDriver();
+  } catch (err) {
+    // Nunca crashear: degrada a memoria y expón el error para la UI.
+    const message =
+      err instanceof Error ? err.message : "Error desconocido al iniciar la base de datos";
+    console.error("[VXCore Admin] Error al iniciar la base de datos:", err);
+    dbError = message;
+    db = makeMemoryDriver();
+  }
   return db;
+}
+
+/**
+ * Devuelve el driver si la base de datos funciona, o lanza un error con
+ * instrucciones claras si no (para rutas de mutación que no pueden
+ * degradar silenciosamente).
+ */
+export function requireHealthyDb(): Driver {
+  const error = getDbError();
+  if (error) {
+    throw new Error(
+      `Base de datos no disponible: ${error}. Configura TURSO_DATABASE_URL y TURSO_AUTH_TOKEN en Vercel.`
+    );
+  }
+  return getDb();
 }
 
 /* ------------------------------------------------------------------ */

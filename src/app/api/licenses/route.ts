@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { createLicense, setLicenseStatus } from "@/lib/db";
+import { createLicense, getDbError, setLicenseStatus } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
+
+function dbUnavailable(): NextResponse | null {
+  const error = getDbError();
+  return error
+    ? NextResponse.json(
+        { error: `Base de datos no configurada: ${error}` },
+        { status: 503 }
+      )
+    : null;
+}
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const down = dbUnavailable();
+  if (down) return down;
 
   let body: { email?: string; note?: string };
   try {
@@ -32,6 +44,8 @@ export async function PATCH(req: NextRequest) {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const down = dbUnavailable();
+  if (down) return down;
 
   let body: { id?: number; status?: string };
   try {

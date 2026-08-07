@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAdmin } from "@/lib/auth";
-import { deleteContact, setContactStatus } from "@/lib/db";
+import { deleteContact, getDbError, setContactStatus } from "@/lib/db";
+
+function dbUnavailable(): NextResponse | null {
+  const error = getDbError();
+  return error
+    ? NextResponse.json(
+        { error: `Base de datos no configurada: ${error}` },
+        { status: 503 }
+      )
+    : null;
+}
 
 export async function PATCH(req: NextRequest) {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const down = dbUnavailable();
+  if (down) return down;
 
   let body: { id?: number; status?: string };
   try {
@@ -29,6 +41,8 @@ export async function DELETE(req: NextRequest) {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const down = dbUnavailable();
+  if (down) return down;
 
   let body: { id?: number };
   try {
