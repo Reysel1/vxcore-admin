@@ -4,6 +4,7 @@ import { isAdmin } from "@/lib/auth";
 import {
   addMessage,
   getDbError,
+  getUserTicket,
   listMessages,
   markMessagesRead,
 } from "@/lib/db";
@@ -34,7 +35,10 @@ export async function GET(req: NextRequest) {
   // El staff ha visto los mensajes del usuario.
   markMessagesRead(user, "user");
 
-  return NextResponse.json({ messages });
+  // Ticket del usuario para que el staff vea el estado y la valoración.
+  const ticket = getUserTicket(user) ?? null;
+
+  return NextResponse.json({ messages, ticket });
 }
 
 export async function POST(req: NextRequest) {

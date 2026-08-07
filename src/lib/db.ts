@@ -106,6 +106,19 @@ const SCHEMA = `
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_email);
+
+  CREATE TABLE IF NOT EXISTS tickets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_email TEXT NOT NULL,
+    subject TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    rating INTEGER,
+    rating_comment TEXT,
+    closed_at TEXT,
+    rated_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_tickets_email ON tickets(user_email);
 `;
 
 /**
@@ -471,7 +484,7 @@ export function totalUnreadForStaff(): number {
   return Number(row.n);
 }
 
-/** Una fila por usuario con el último mensaje, fecha y no leídos. */
+/** Una fila por usuario con el último mensaje, fecha, no leídos y su ticket. */
 export function listConversations(): Row[] {
   return getDb()
     .prepare(
@@ -480,13 +493,28 @@ export function listConversations(): Row[] {
          (SELECT body FROM messages WHERE user_email = m.user_email ORDER BY id DESC LIMIT 1) AS last_body,
          (SELECT sender FROM messages WHERE user_email = m.user_email ORDER BY id DESC LIMIT 1) AS last_sender,
          (SELECT created_at FROM messages WHERE user_email = m.user_email ORDER BY id DESC LIMIT 1) AS last_at,
-         (SELECT COUNT(*) FROM messages WHERE user_email = m.user_email AND sender = 'user' AND read = 0) AS unread
+         (SELECT COUNT(*) FROM messages WHERE user_email = m.user_email AND sender = 'user' AND read = 0) AS unread,
+         (SELECT status FROM tickets WHERE user_email = m.user_email ORDER BY id DESC LIMIT 1) AS ticket_status,
+         (SELECT rating FROM tickets WHERE user_email = m.user_email ORDER BY id DESC LIMIT 1) AS ticket_rating
        FROM messages m
        LEFT JOIN users u ON u.email = m.user_email
        GROUP BY m.user_email
        ORDER BY last_at DESC`
     )
     .all() as Row[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Tickets de soporte                                                 */
+/* ------------------------------------------------------------------ */
+
+/** Último ticket del usuario (abierto o cerrado). */
+export function getUserTicket(userEmail: string): Row | undefined {
+  return getDb()
+    .prepare(
+      "SELECT * FROM tickets WHERE user_email = ? ORDER BY id DESC LIMIT 1"
+    )
+    .get(userEmail) as Row | undefined;
 }
 
 /* ------------------------------------------------------------------ */

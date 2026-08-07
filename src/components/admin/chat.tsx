@@ -5,6 +5,8 @@ import {
   Loader2,
   MessageCircle,
   Send,
+  Star,
+  Ticket,
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
@@ -27,7 +29,43 @@ type Conv = {
   last_sender: "user" | "staff";
   last_at: string;
   unread: number;
+  ticket_status: "open" | "closed" | null;
+  ticket_rating: number | null;
 };
+
+type Ticket = {
+  id: number;
+  user_email: string;
+  subject: string | null;
+  status: "open" | "closed";
+  rating: number | null;
+  rating_comment: string | null;
+  closed_at: string | null;
+  rated_at: string | null;
+  created_at: string;
+};
+
+/** Estrellas de solo lectura para mostrar la valoración del usuario. */
+function StarRating({ value }: { value: number }) {
+  return (
+    <span
+      className="inline-flex items-center gap-0.5"
+      aria-label={`Valoración: ${value} de 5`}
+    >
+      {Array.from({ length: 5 }, (_, i) => i + 1).map((n) => (
+        <Star
+          key={n}
+          className={cn(
+            "size-3",
+            n <= value
+              ? "fill-amber-400 text-amber-400"
+              : "text-muted-foreground/30"
+          )}
+        />
+      ))}
+    </span>
+  );
+}
 
 function formatTime(sqlDate?: string): string {
   if (!sqlDate) return "";
@@ -47,6 +85,7 @@ export function ChatAdmin() {
   const [conversations, setConversations] = React.useState<Conv[]>([]);
   const [selected, setSelected] = React.useState<string | null>(null);
   const [messages, setMessages] = React.useState<Msg[]>([]);
+  const [ticket, setTicket] = React.useState<Ticket | null>(null);
   const [draft, setDraft] = React.useState("");
   const [loadingConv, setLoadingConv] = React.useState(true);
   const [sending, setSending] = React.useState(false);
@@ -85,6 +124,7 @@ export function ChatAdmin() {
       if (selectedRef.current !== user) return;
       const data = await res.json();
       if (!Array.isArray(data.messages)) return;
+      if (data.ticket) setTicket(data.ticket as Ticket);
       const fresh = (data.messages as Msg[]).filter(
         (m) => !knownIds.current.has(m.id)
       );
@@ -110,7 +150,10 @@ export function ChatAdmin() {
     if (!selected) return;
     selectedRef.current = selected;
     knownIds.current.clear();
-    const t1 = window.setTimeout(() => setMessages([]), 0);
+    const t1 = window.setTimeout(() => {
+      setMessages([]);
+      setTicket(null);
+    }, 0);
     const t2 = window.setTimeout(() => loadMessages(selected), 0);
     const id = window.setInterval(() => loadMessages(selected), 4000);
     return () => {
@@ -194,8 +237,33 @@ export function ChatAdmin() {
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-medium">
-                      {conv.user_name ?? conv.user_email}
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span
+                        className={cn(
+                          "size-1.5 shrink-0 rounded-full",
+                          conv.ticket_status === "open"
+                            ? "bg-emerald-500"
+                            : conv.ticket_status === "closed"
+                              ? "bg-muted-foreground/40"
+                              : "bg-muted-foreground/15"
+                        )}
+                        title={
+                          conv.ticket_status === "open"
+                            ? "Ticket abierto"
+                            : conv.ticket_status === "closed"
+                              ? "Ticket cerrado"
+                              : "Sin ticket"
+                        }
+                      />
+                      <span className="truncate text-sm font-medium">
+                        {conv.user_name ?? conv.user_email}
+                      </span>
+                      {conv.ticket_status && Number(conv.ticket_rating) > 0 && (
+                        <Star
+                          className="size-3 shrink-0 fill-amber-400 text-amber-400"
+                          aria-label={`Valorado con ${conv.ticket_rating} de 5`}
+                        />
+                      )}
                     </span>
                     {Number(conv.unread) > 0 && (
                       <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-background">
@@ -220,8 +288,8 @@ export function ChatAdmin() {
       {/* Ventana de chat */}
       <Card className="flex flex-col">
         <CardHeader className="border-b border-border pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <MessageCircle className="size-4 text-muted-foreground" />
+          <CardTitle className="flex flex-wrap items-center gap-x-2 gap-y-2 text-base">
+            <MessageCircle className="size-4 shrink-0 text-muted-foreground" />
             {current ? (
               <span className="truncate">
                 {current.user_name ?? "Usuario"} ·{" "}
@@ -232,7 +300,32 @@ export function ChatAdmin() {
             ) : (
               "Selecciona una conversación"
             )}
+            {ticket && (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium",
+                  ticket.status === "open"
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+                    : ticket.rating != null
+                      ? "border-amber-500/30 bg-amber-500/10 text-amber-500"
+                      : "border-border bg-muted/40 text-muted-foreground"
+                )}
+              >
+                <Ticket className="size-3" />
+                {ticket.status === "open"
+                  ? `Ticket #${ticket.id} abierto`
+                  : ticket.rating != null
+                    ? `Cerrado · ${ticket.rating}/5`
+                    : `Ticket #${ticket.id} cerrado`}
+              </span>
+            )}
           </CardTitle>
+          {ticket?.rating != null && ticket.rating_comment && (
+            <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <StarRating value={Number(ticket.rating)} />
+              <span className="truncate">“{ticket.rating_comment}”</span>
+            </p>
+          )}
         </CardHeader>
 
         <CardContent className="flex flex-1 flex-col gap-3">
