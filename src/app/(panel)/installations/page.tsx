@@ -95,6 +95,7 @@ export default function InstallationsPage() {
                   <TableHead>Licencia</TableHead>
                   <TableHead>Dueño</TableHead>
                   <TableHead>Acceso</TableHead>
+                  <TableHead>Panel público</TableHead>
                   <TableHead>Visto</TableHead>
                   <TableHead>Alta</TableHead>
                 </TableRow>
@@ -138,6 +139,22 @@ export default function InstallationsPage() {
                               ? "Sin licencia"
                               : "Revocada"}
                           </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {/* Tener túnel es opcional: la mayoría no publicará su
+                            panel, y ahí un guion dice más que una celda vacía. */}
+                        {installation.tunnel_hostname ? (
+                          <a
+                            href={`https://${String(installation.tunnel_hostname)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-mono text-xs text-primary hover:underline"
+                          >
+                            {String(installation.tunnel_hostname)}
+                          </a>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">

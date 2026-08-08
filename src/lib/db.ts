@@ -139,6 +139,22 @@ const SCHEMA = `
     last_seen TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_installations_license ON installations(license_key);
+
+  -- Túnel de Cloudflare de cada equipo: es lo que le da al cliente su enlace
+  -- público. La escribe la web al aprovisionar; aquí sólo se lee.
+  --
+  -- Igual que installations, se declara también aquí porque admin y web
+  -- comparten base y cualquiera de las dos puede arrancar primero.
+  CREATE TABLE IF NOT EXISTS tunnels (
+    installation_id TEXT PRIMARY KEY,
+    installation_name TEXT NOT NULL DEFAULT '',
+    license_key TEXT NOT NULL,
+    hostname TEXT NOT NULL,
+    tunnel_id TEXT NOT NULL,
+    tunnel_secret TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_tunnels_license ON tunnels(license_key);
 `;
 
 /**
@@ -409,15 +425,26 @@ export function setLicenseStatus(id: number, status: "active" | "revoked"): void
  * que se ve aquí en la siguiente consulta, sin tocar la tabla `installations`
  * ni ejecutar borrados en cascada. `license_status` queda a NULL si la
  * licencia se borró del todo, que también es «sin acceso».
+ *
+ * El segundo `LEFT JOIN`, con `tunnels`, trae el enlace público del equipo
+ * cuando lo tiene. Es LEFT y no INNER porque tener túnel es opcional: el
+ * cliente decide si publica su panel, y la mayoría no lo hará.
+ *
+ * `tunnel_secret` no se selecciona a propósito: es una credencial y aquí sólo
+ * se está pintando una tabla. Lo que no sale de la base de datos no se puede
+ * filtrar en una respuesta.
  */
 export function listInstallations(): Row[] {
   return getDb()
     .prepare(
       `SELECT i.*,
          l.status AS license_status,
-         l.user_email AS license_email
+         l.user_email AS license_email,
+         t.hostname AS tunnel_hostname,
+         t.created_at AS tunnel_created_at
        FROM installations i
        LEFT JOIN licenses l ON LOWER(l.license_key) = LOWER(i.license_key)
+       LEFT JOIN tunnels t ON t.installation_id = i.id
        ORDER BY i.last_seen DESC`
     )
     .all() as Row[];
