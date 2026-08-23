@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, Trash2 } from "lucide-react";
+import { Check, KeyRound, Loader2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
@@ -20,14 +20,16 @@ import { Button } from "@/components/ui/button";
 import { ApiError, sendJson } from "@/lib/fetch-json";
 import { cn } from "@/lib/utils";
 
-type Pending = "read" | "delete" | null;
+type Pending = "grant" | "read" | "delete" | null;
 
 export function ContactActions({
   id,
+  email,
   status,
   subject,
 }: {
   id: number;
+  email: string;
   status: "new" | "read";
   subject: string;
 }) {
@@ -36,6 +38,7 @@ export function ContactActions({
   // «Leído» aunque lo que estuvieras haciendo fuera borrar.
   const [pending, setPending] = React.useState<Pending>(null);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [grantOpen, setGrantOpen] = React.useState(false);
 
   async function markRead() {
     setPending("read");
@@ -45,6 +48,39 @@ export function ContactActions({
     } catch (err) {
       toast.error(
         err instanceof ApiError ? err.message : "No se pudo actualizar."
+      );
+    } finally {
+      setPending(null);
+    }
+  }
+
+  // Concede acceso al panel: crea una licencia activa para el email del
+  // solicitante (es lo que desbloquea la descarga del instalador) y marca el
+  // mensaje como leído.
+  async function grantAccess() {
+    setPending("grant");
+    try {
+      const data = await sendJson<{ license_key: string }>(
+        "/api/licenses",
+        "POST",
+        {
+          email,
+          note: "Acceso concedido desde solicitud (beta)",
+        }
+      );
+      toast.success(`Acceso concedido · licencia ${data.license_key}`);
+      // Si seguía como nuevo, lo pasamos a leído para que no vuelva a contar
+      // como pendiente en el panel.
+      if (status === "new") {
+        await sendJson("/api/contacts", "PATCH", { id, status: "read" }).catch(
+          () => {}
+        );
+      }
+      setGrantOpen(false);
+      router.refresh();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "No se pudo conceder el acceso."
       );
     } finally {
       setPending(null);
@@ -85,6 +121,56 @@ export function ContactActions({
           Leído
         </Button>
       )}
+
+      {/* Conceder acceso: crea la licencia del solicitante directamente desde
+          la bandeja, sin ir a la sección Licencias. */}
+      <AlertDialog open={grantOpen} onOpenChange={setGrantOpen}>
+        <AlertDialogTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-emerald-600 hover:text-emerald-600 dark:text-emerald-400 dark:hover:text-emerald-400"
+            disabled={pending !== null}
+          >
+            {pending === "grant" ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <KeyRound className="size-3.5" />
+            )}
+            Conceder acceso
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Conceder acceso al panel?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se creará una licencia activa para <strong>{email}</strong> ({""}
+              «{subject}»). Esa persona podrá descargar el instalador y usar
+              VXCore. ¿Continuamos?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending === "grant"}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-600/90"
+              disabled={pending === "grant"}
+              onClick={(e) => {
+                e.preventDefault();
+                void grantAccess();
+              }}
+            >
+              {pending === "grant" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <KeyRound className="size-4" />
+              )}
+              Conceder acceso
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Borrar es irreversible y no había ninguna confirmación: un clic de
           más y el mensaje desaparecía sin forma de recuperarlo. */}

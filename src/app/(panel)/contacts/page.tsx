@@ -100,6 +100,7 @@ export default function ContactsPage() {
                     <TableCell className="text-right">
                       <ContactActions
                         id={Number(contact.id)}
+                        email={String(contact.email)}
                         status={contact.status as "new" | "read"}
                         subject={String(contact.subject)}
                       />
