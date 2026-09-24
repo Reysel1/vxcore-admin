@@ -22,9 +22,15 @@ export function getReleasesRepo(): string {
 
 /** Token de GitHub con permiso de lectura de contenido sobre ese repo. */
 export function getGithubToken(): string | undefined {
-  return (
-    process.env.VXCORE_GITHUB_TOKEN || process.env.GITHUB_TOKEN || undefined
-  );
+  const raw = process.env.VXCORE_GITHUB_TOKEN || process.env.GITHUB_TOKEN;
+  // Un token nunca lleva espacios ni comillas, pero al pegarlo en Vercel es
+  // fácil arrastrarlos, y GitHub lo rechaza con un 401 como si no valiera.
+  return raw?.replace(/["'\s]/g, "") || undefined;
+}
+
+/** Variable de la que sale el token, para nombrarla en los errores. */
+function tokenVar(): string {
+  return process.env.VXCORE_GITHUB_TOKEN ? "VXCORE_GITHUB_TOKEN" : "GITHUB_TOKEN";
 }
 
 export type ReleaseAsset = {
@@ -58,6 +64,26 @@ function requireToken(): string {
   return token;
 }
 
+/**
+ * Error legible para una respuesta fallida. Un 401 es casi siempre un token
+ * caducado o revocado (los fine-grained caducan a los 30 días por defecto), así
+ * que decimos cómo arreglarlo; en el resto añadimos el `message` de GitHub, que
+ * explica el motivo (permisos, límite de peticiones…).
+ */
+async function responseError(res: Response, what: string): Promise<GithubError> {
+  const body = (await res.json().catch(() => null)) as {
+    message?: unknown;
+  } | null;
+  const reason = typeof body?.message === "string" ? ` (${body.message})` : "";
+
+  if (res.status === 401) {
+    return new GithubError(
+      `GitHub rechazó el token de ${tokenVar()}${reason}: ha caducado, se ha revocado o no está bien copiado. Genera uno nuevo con permiso de lectura de «Contents» sobre ${getReleasesRepo()}, cámbialo en la variable de entorno y vuelve a desplegar para que se aplique.`
+    );
+  }
+  return new GithubError(`GitHub respondió ${res.status}${reason} al ${what}.`);
+}
+
 type ApiAsset = { id: number; name: string; size: number };
 type ApiRelease = {
   tag_name: string;
@@ -86,9 +112,7 @@ export async function listReleaseAssets(): Promise<ReleaseAsset[]> {
     );
   }
   if (!res.ok) {
-    throw new GithubError(
-      `GitHub respondió ${res.status} al listar las releases de ${repo}.`
-    );
+    throw await responseError(res, `listar las releases de ${repo}`);
   }
 
   const releases = (await res.json()) as ApiRelease[];
@@ -137,7 +161,8 @@ export async function getAssetDownloadUrl(
   }
   if (res.status === 404) return null;
 
-  throw new GithubError(
-    `GitHub respondió ${res.status} al pedir el enlace de descarga del asset ${assetId}.`
+  throw await responseError(
+    res,
+    `pedir el enlace de descarga del asset ${assetId}`
   );
 }
